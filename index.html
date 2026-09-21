@@ -280,12 +280,104 @@
     }
     .key.wide small{ font-size:9px; }
   }
+  .crawl-overlay{
+    position:absolute;
+    inset:0;
+    background:#000;
+    overflow:hidden;
+    display:none;
+    cursor:pointer;
+    z-index:5;
+  }
+  .crawl-stars{
+    position:absolute;
+    inset:0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, #fff, transparent),
+      radial-gradient(1px 1px at 30% 70%, #fff, transparent),
+      radial-gradient(1px 1px at 50% 40%, #fff, transparent),
+      radial-gradient(1px 1px at 70% 85%, #fff, transparent),
+      radial-gradient(1px 1px at 85% 15%, #fff, transparent),
+      radial-gradient(1px 1px at 92% 55%, #fff, transparent),
+      radial-gradient(1px 1px at 15% 90%, #fff, transparent),
+      radial-gradient(1px 1px at 60% 10%, #fff, transparent);
+    opacity:0.7;
+  }
+  .crawl-viewport{
+    position:absolute;
+    inset:0;
+    perspective:500px;
+    perspective-origin:50% 100%;
+    overflow:hidden;
+  }
+  .crawl-text{
+    /* классическая схема "Звёздных войн": сам текст наклонён и едет через
+       top — начинает чуть ниже экрана (первая строка почти сразу видна
+       снизу, без долгого ожидания) и постепенно выезжает вверх, утекая
+       в точку схода. Угол наклона пологий (20°), как в оригинале, иначе
+       текст схлопывается слишком резко и не успевает читаться */
+    position:absolute;
+    left:8%;
+    right:8%;
+    top:60%;
+    transform-origin:50% 100%;
+    transform:rotateX(20deg);
+    color:#ffe81f;
+    font-family:'Courier New', monospace;
+    font-weight:bold;
+    text-align:center;
+    line-height:1.6;
+    font-size:clamp(24px, 6.5vw, 52px);
+    animation:crawl-scroll 42s linear forwards;
+  }
+  .crawl-text p{ margin:0 0 1.2em; }
+  .crawl-text .crawl-title{
+    font-size:clamp(30px, 8.5vw, 68px);
+    margin-bottom:1.1em;
+  }
+  @keyframes crawl-scroll{
+    0%   { top:60%; }
+    100% { top:-380%; }
+  }
+  .crawl-fade{
+    position:absolute;
+    inset:0;
+    background:linear-gradient(to bottom, #000 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 80%, #000 100%);
+    pointer-events:none;
+  }
+  .crawl-skip{
+    position:absolute;
+    left:0; right:0; bottom:10px;
+    text-align:center;
+    color:#8a8a90;
+    font-size:11px;
+    font-family:'Courier New', monospace;
+    letter-spacing:2px;
+    animation:crawl-blink 1.4s steps(2) infinite;
+  }
+  @keyframes crawl-blink{ 50%{ opacity:0.25; } }
 </style>
 </head>
 <body>
   <div class="tv">
     <div class="screen-wrap">
       <canvas id="game" width="900" height="600"></canvas>
+      <div class="crawl-overlay" id="crawlOverlay">
+        <div class="crawl-stars"></div>
+        <div class="crawl-viewport">
+          <div class="crawl-text" id="crawlText">
+            <p class="crawl-title">ПОКА НЕ ПОГАСЛИ ФАРЫ</p>
+            <p>ОНА ЗВОНИЛА КАЖДУЮ НОЧЬ, ПОКА МОГЛА ГОВОРИТЬ.</p>
+            <p>ПОСЛЕДНИЙ ЗВОНОК БЫЛ ЧЕТЫРЕ ЧАСА НАЗАД.</p>
+            <p>ТЫ ОБЕЩАЛ ЕЙ ЖЕЛАНИЕ У ОЗЕРА. ОСТАЛОСЬ УСПЕТЬ.</p>
+            <p>ГОВОРЯТ: ЗА ЛУГАМИ ЕСТЬ ОЗЕРО-ЖЕЛАНИЕ.</p>
+            <p>ОНО ИСПОЛНИТ ПРОСЬБУ ТОГО, КТО ДОЕДЕТ —</p>
+            <p>ПОКА НЕ ПОГАСЛИ ОБЕ ФАРЫ.</p>
+          </div>
+        </div>
+        <div class="crawl-fade"></div>
+        <div class="crawl-skip">НАЖМИ, ЧТОБЫ ПРОПУСТИТЬ</div>
+      </div>
       <div class="scanlines"></div>
       <div class="vignette"></div>
       <div class="flicker"></div>
@@ -447,6 +539,25 @@ if (btnHorn){
     if (state === 'playing'){ honkHorn(); }
     else { handleConfirm(); }
   });
+}
+
+var crawlOverlay = document.getElementById('crawlOverlay');
+var crawlText = document.getElementById('crawlText');
+if (crawlOverlay){
+  crawlOverlay.addEventListener('click', function(){
+    ensureAudio();
+    handleConfirm();
+  });
+}
+if (crawlText){
+  // вступление в стиле "Звёздных войн" — если анимация не долистает сама,
+  // подстрахуемся таймером той же длительности
+  crawlText.addEventListener('animationend', function(){
+    if (state === 'intro'){ state = 'title'; }
+  });
+  setTimeout(function(){
+    if (state === 'intro'){ state = 'title'; }
+  }, 42500);
 }
 canvas.addEventListener('touchstart', function(e){
   e.preventDefault();
@@ -1619,7 +1730,7 @@ function spawnFloatingText(x,y,text,color,size){
 }
 
 /* ---------------- game state ---------------- */
-var state = 'title'; // title | playing | paused | gameover
+var state = 'intro'; // intro | title | playing | paused | gameover
 var score = 0;
 // пройденная дистанция в тех же единицах, что и score, но БЕЗ бонусных очков
 // (монетки/косули) — биомы и выезд из города должны зависеть только от реально
@@ -1727,7 +1838,9 @@ function resetGame(){
 resetGame();
 
 function handleConfirm(){
-  if (state === 'title' || state === 'gameover'){
+  if (state === 'intro'){
+    state = 'title';
+  } else if (state === 'title' || state === 'gameover'){
     state = 'select';
   } else if (state === 'ending' && ending.timer >= ENDING_PROMPT_AT){
     state = 'select';
@@ -2430,21 +2543,17 @@ function drawTitle(){
   centerText('ПОКА НЕ', 150, 44, PAL.carWhite);
   centerText('ПОГАСЛИ ФАРЫ', 200, 44, PAL.deerBody);
 
-  centerText('ГОВОРЯТ: ЗА ЛУГАМИ ЕСТЬ ОЗЕРО-ЖЕЛАНИЕ.', 246, 13, '#8aa8d0');
-  centerText('ОНО ИСПОЛНИТ ПРОСЬБУ ТОГО, КТО ДОЕДЕТ —', 262, 13, '#8aa8d0');
-  centerText('ПОКА НЕ ПОГАСЛИ ОБЕ ФАРЫ.', 278, 13, '#8aa8d0');
+  drawCar(W/2-160-CAR_W/2, 262, false);
+  drawDeer(W/2+120-DEER_W/2, 262, 1, true, false);
 
-  drawCar(W/2-160-CAR_W/2, 312, false);
-  drawDeer(W/2+120-DEER_W/2, 312, 1, true, false);
-
-  centerText('УВОРАЧИВАЙСЯ ОТ МАШИН', 394, 13, PAL.carYellow);
-  centerText('КОСУЛИ ПОЯВЯТСЯ НА УРОВНЕ 2 (300 ОЧКОВ)', 412, 12, PAL.deerBody);
-  centerText('50 ОЧКОВ МОНЕТАМИ — СИГНАЛ (ПРОБЕЛ) ОТПУГИВАЕТ КОСУЛЬ', 430, 12, PAL.coinGold);
+  centerText('УВОРАЧИВАЙСЯ ОТ МАШИН', 344, 13, PAL.carYellow);
+  centerText('КОСУЛИ ПОЯВЯТСЯ НА УРОВНЕ 2 (300 ОЧКОВ)', 362, 12, PAL.deerBody);
+  centerText('50 ОЧКОВ МОНЕТАМИ — СИГНАЛ (ПРОБЕЛ) ОТПУГИВАЕТ КОСУЛЬ', 380, 12, PAL.coinGold);
 
   if (Math.floor(elapsed*2)%2===0){
-    centerText('НАЖМИ ENTER ИЛИ ПРОБЕЛ', 522, 20, PAL.ink);
+    centerText('НАЖМИ ENTER ИЛИ ПРОБЕЛ', 472, 20, PAL.ink);
   }
-  centerText('РЕКОРД: ' + best, 556, 16, PAL.ink2);
+  centerText('РЕКОРД: ' + best, 506, 16, PAL.ink2);
 }
 
 function drawPaused(){
@@ -2523,6 +2632,7 @@ function drawSelect(){
 }
 
 function draw(){
+  if (crawlOverlay) crawlOverlay.style.display = (state === 'intro') ? 'block' : 'none';
   drawRoad();
 
   var deerSorted = deer;
