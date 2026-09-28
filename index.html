@@ -433,6 +433,15 @@ var W = canvas.width, H = canvas.height;
 var keys = {};
 var blockedKeys = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space',' ','Enter'];
 function handleSelectArrow(code){
+  if (state === 'difficulty'){
+    if (code === 'ArrowLeft'){
+      selectedDifficultyIndex = (selectedDifficultyIndex - 1 + DIFFICULTIES.length) % DIFFICULTIES.length;
+    } else if (code === 'ArrowRight'){
+      selectedDifficultyIndex = (selectedDifficultyIndex + 1) % DIFFICULTIES.length;
+    }
+    try { localStorage.setItem('wcvd_difficulty', String(selectedDifficultyIndex)); } catch(e){}
+    return;
+  }
   if (state !== 'select') return;
   if (code === 'ArrowLeft'){
     selectedColorIndex = (selectedColorIndex - 1 + CAR_COLORS.length) % CAR_COLORS.length;
@@ -1234,6 +1243,16 @@ var CAR_STYLES = [
 ];
 var selectedColorIndex = 0;
 var selectedStyleIndex = 0;
+var DIFFICULTIES = [
+  {name:'ЛЁГКИЙ', desc:'МЕНЬШЕ МАШИН, МЕДЛЕННЕЕ РАЗГОН', speedMul:0.85, trafficMul:1.35},
+  {name:'СРЕДНИЙ', desc:'ОБЫЧНАЯ ГОНКА', speedMul:1.0, trafficMul:1.0},
+  {name:'СЛОЖНЫЙ', desc:'БОЛЬШЕ МАШИН, БЫСТРЕЕ РАЗГОН', speedMul:1.15, trafficMul:0.75}
+];
+var selectedDifficultyIndex = 1;
+try {
+  var savedDifficulty = parseInt(localStorage.getItem('wcvd_difficulty'), 10);
+  if (savedDifficulty >= 0 && savedDifficulty < DIFFICULTIES.length) selectedDifficultyIndex = savedDifficulty;
+} catch(e){}
 function drawCar(x, y, hurtFlash, custom, damageLevel, lights, oncoming, style){
   if (style === 'sport') return drawCarSport(x, y, hurtFlash, custom, damageLevel, lights, oncoming);
   if (style === 'suv') return drawCarSUV(x, y, hurtFlash, custom, damageLevel, lights, oncoming);
@@ -1730,7 +1749,7 @@ function spawnFloatingText(x,y,text,color,size){
 }
 
 /* ---------------- game state ---------------- */
-var state = 'intro'; // intro | title | playing | paused | gameover
+var state = 'intro'; // intro | title | difficulty | select | playing | paused | gameover | ending
 var score = 0;
 // пройденная дистанция в тех же единицах, что и score, но БЕЗ бонусных очков
 // (монетки/косули) — биомы и выезд из города должны зависеть только от реально
@@ -1808,7 +1827,7 @@ function resetGame(){
   coinTimer = 1.0;
   coinInterval = 1.6;
   logTimer = 3.0;
-  logInterval = 4.5;
+  logInterval = 4.5 * DIFFICULTIES[selectedDifficultyIndex].trafficMul;
   heartTimer = 2.0;
   smokeTimer = 0;
   leftLightOn = true;
@@ -1841,8 +1860,10 @@ function handleConfirm(){
   if (state === 'intro'){
     state = 'title';
   } else if (state === 'title' || state === 'gameover'){
-    state = 'select';
+    state = 'difficulty';
   } else if (state === 'ending' && ending.timer >= ENDING_PROMPT_AT){
+    state = 'difficulty';
+  } else if (state === 'difficulty'){
     state = 'select';
   } else if (state === 'select'){
     resetGame();
@@ -2100,6 +2121,14 @@ function update(dt){
   // после 3000 очков трафик потихоньку густеет к финишу — скорость и косули не трогаем
   var lateDifficulty = Math.max(0, Math.min(1, (score - LATE_TRAFFIC_START) / (WIN_SCORE - LATE_TRAFFIC_START)));
   trafficInterval -= lateDifficulty * LATE_TRAFFIC_BOOST;
+
+  // уровень сложности, выбранный игроком, — не меняет пороги/жизни/финиш,
+  // только домножает уже посчитанные скорость и частоту трафика/косуль
+  var diffPreset = DIFFICULTIES[selectedDifficultyIndex];
+  baseSpeed *= diffPreset.speedMul;
+  maxSpeed *= diffPreset.speedMul;
+  spawnInterval *= diffPreset.trafficMul;
+  trafficInterval *= diffPreset.trafficMul;
 
   var biomeIdx = biomeIndexAt(distance);
   if (biomeIdx !== lastBiomeIndex){
@@ -2607,6 +2636,21 @@ function drawEnding(){
   }
 }
 
+function drawDifficulty(){
+  ctx.fillStyle = 'rgba(5,5,10,0.62)';
+  ctx.fillRect(0,0,W,H);
+  centerText('ВЫБЕРИ СЛОЖНОСТЬ', 150, 30, PAL.ink);
+
+  var diff = DIFFICULTIES[selectedDifficultyIndex];
+  centerText('< ' + diff.name + ' >', 280, 30, PAL.carYellow);
+  centerText(diff.desc, 320, 14, PAL.ink2);
+  centerText('← / →', 348, 13, PAL.ink2);
+
+  if (Math.floor(elapsed*2)%2===0){
+    centerText('ENTER ИЛИ ПРОБЕЛ — ДАЛЬШЕ', 460, 20, PAL.ink);
+  }
+}
+
 function drawSelect(){
   ctx.fillStyle = 'rgba(5,5,10,0.62)';
   ctx.fillRect(0,0,W,H);
@@ -2690,6 +2734,7 @@ function draw(){
   drawHUD();
 
   if (state === 'title') drawTitle();
+  else if (state === 'difficulty') drawDifficulty();
   else if (state === 'select') drawSelect();
   else if (state === 'paused') drawPaused();
   else if (state === 'gameover') drawGameOver();
